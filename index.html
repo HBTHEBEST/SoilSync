@@ -1,0 +1,1563 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agricultural Soil Analysis Dashboard</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    
+    body {
+      background-color: #f5f7fa;
+      color: #333;
+    }
+    
+    .dashboard {
+      display: grid;
+      grid-template-columns: 300px 1fr;
+      grid-template-rows: 70px 1fr;
+      height: 100vh;
+      grid-template-areas:
+        "header header"
+        "sidebar main";
+    }
+    
+    .header {
+      grid-area: header;
+      background-color: #205375;
+      color: white;
+      padding: 15px 30px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    }
+    
+    .sidebar {
+      grid-area: sidebar;
+      background-color: white;
+      padding: 20px;
+      box-shadow: 2px 0 5px rgba(0, 0, 0, 0.05);
+      overflow-y: auto;
+    }
+    
+    .main {
+      grid-area: main;
+      padding: 20px;
+      overflow-y: auto;
+    }
+    
+    .map-container {
+      height: calc(100vh - 130px);
+      background-color: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+      overflow: hidden;
+    }
+    
+    #map {
+      height: 100%;
+      width: 100%;
+    }
+    
+    .control-panel {
+      margin-bottom: 20px;
+    }
+    
+    h2 {
+      margin-bottom: 15px;
+      color: #205375;
+      font-size: 1.2rem;
+    }
+    
+    button {
+      background-color: #3498db;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      border-radius: 5px;
+      margin: 5px 0;
+      cursor: pointer;
+      font-weight: 500;
+      transition: background-color 0.2s;
+      display: block;
+      width: 100%;
+    }
+    
+    button:hover {
+      background-color: #2980b9;
+    }
+    
+    button:disabled {
+      background-color: #bdc3c7;
+      cursor: not-allowed;
+    }
+    
+    .button-primary {
+      background-color: #205375;
+    }
+    
+    .button-primary:hover {
+      background-color: #164058;
+    }
+    
+    .button-success {
+      background-color: #27ae60;
+    }
+    
+    .button-success:hover {
+      background-color: #219653;
+    }
+    
+    .button-warning {
+      background-color: #e67e22;
+    }
+    
+    .button-warning:hover {
+      background-color: #d35400;
+    }
+    
+    .button-danger {
+      background-color: #e74c3c;
+    }
+    
+    .button-danger:hover {
+      background-color: #c0392b;
+    }
+    
+    .status-panel {
+      background-color: white;
+      border-radius: 8px;
+      padding: 15px;
+      margin-top: 20px;
+      border-left: 4px solid #3498db;
+    }
+    
+    .status-message {
+      margin-bottom: 8px;
+      padding: 8px 0;
+      border-bottom: 1px solid #eee;
+    }
+    
+    .status-message:last-child {
+      border-bottom: none;
+    }
+    
+    .status-error {
+      color: #e74c3c;
+    }
+    
+    .status-success {
+      color: #27ae60;
+    }
+    
+    .npk-reading {
+      background-color: white;
+      border-radius: 8px;
+      padding: 15px;
+      margin-top: 15px;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+    }
+    
+    .npk-value {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid #eee;
+    }
+    
+    .npk-value:last-child {
+      border-bottom: none;
+    }
+    
+    .npk-value-label {
+      font-weight: 500;
+    }
+    
+    .plot-info {
+      margin-top: 15px;
+      background-color: #f8f9fa;
+      border-radius: 8px;
+      padding: 15px;
+    }
+    
+    .legend {
+      background-color: white;
+      border-radius: 8px;
+      padding: 15px;
+      margin-top: 15px;
+    }
+    
+    .legend-item {
+      display: flex;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    
+    .legend-color {
+      width: 20px;
+      height: 20px;
+      border-radius: 4px;
+      margin-right: 10px;
+    }
+    
+    .ble-connection {
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid #eee;
+    }
+    
+    .loading {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid rgba(0, 0, 0, 0.1);
+      border-radius: 50%;
+      border-top-color: #3498db;
+      animation: spin 1s ease-in-out infinite;
+      margin-left: 10px;
+      vertical-align: middle;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.5);
+    }
+
+    .modal-content {
+      background-color: white;
+      margin: 10% auto;
+      padding: 20px;
+      border-radius: 8px;
+      width: 50%;
+      max-width: 500px;
+    }
+
+    .close {
+      color: #aaa;
+      float: right;
+      font-size: 28px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .close:hover {
+      color: black;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 15px;
+    }
+
+    th, td {
+      border: 1px solid #ddd;
+      padding: 8px;
+      text-align: left;
+    }
+
+    th {
+      background-color: #f2f2f2;
+    }
+
+    tr:nth-child(even) {
+      background-color: #f9f9f9;
+    }
+
+    /* New styles for crop settings */
+    .crop-panel {
+      background-color: white;
+      border-radius: 8px;
+      padding: 15px;
+      margin-top: 20px;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+    }
+
+    .form-group {
+      margin-bottom: 15px;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: 500;
+    }
+
+    .form-group select,
+    .form-group input {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      background-color: #f8f9fa;
+    }
+
+    .crop-settings-controls {
+      display: flex;
+      gap: 10px;
+    }
+
+    .crop-settings-controls button {
+      flex: 1;
+    }
+
+    /* NPK comparison styles */
+    .npk-comparison {
+      margin-top: 20px;
+    }
+
+    .npk-comparison-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid #eee;
+    }
+
+    .comparison-label {
+      font-weight: 500;
+    }
+
+    .comparison-value {
+      display: flex;
+      align-items: center;
+    }
+
+    .progress-container {
+      width: 100%;
+      background-color: #f1f1f1;
+      border-radius: 5px;
+      margin-top: 5px;
+    }
+
+    .progress-bar {
+      height: 10px;
+      border-radius: 5px;
+      transition: width 0.3s ease-in-out;
+    }
+
+    .progress-optimal {
+      background-color: #27ae60;
+    }
+
+    .progress-suboptimal {
+      background-color: #f39c12;
+    }
+
+    .progress-poor {
+      background-color: #e74c3c;
+    }
+
+    .progress-value {
+      margin-left: 10px;
+      font-size: 0.8rem;
+    }
+
+    /* Alert indicator */
+    .alert-indicator {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      margin-right: 8px;
+    }
+
+    .alert-optimal {
+      background-color: #27ae60;
+    }
+
+    .alert-suboptimal {
+      background-color: #f39c12;
+    }
+
+    .alert-poor {
+      background-color: #e74c3c;
+    }
+
+    .npk-recommendation {
+      margin-top: 15px;
+      padding: 10px;
+      background-color: #f8f9fa;
+      border-left: 4px solid #3498db;
+      border-radius: 4px;
+    }
+
+    /* Map legend for soil status */
+    .map-legend-control {
+      background-color: white;
+      padding: 10px;
+      border-radius: 4px;
+      box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+    }
+
+    .map-legend-item {
+      display: flex;
+      align-items: center;
+      margin-bottom: 5px;
+    }
+
+    .map-legend-color {
+      width: 15px;
+      height: 15px;
+      border-radius: 50%;
+      margin-right: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="dashboard">
+    <header class="header">
+      <h1>Agricultural Soil Analysis</h1>
+      <div>
+        <span id="connection-status">Disconnected</span>
+      </div>
+    </header>
+    
+    <aside class="sidebar">
+      <div class="control-panel">
+        <h2>BLE Connection</h2>
+        <button id="connectButton" class="button-primary">Connect ESP32 Sensor</button>
+        <button id="disconnectButton" disabled>Disconnect Sensor</button>
+      </div>
+      
+      <div class="control-panel">
+        <h2>Land Management</h2>
+        <button id="drawLandButton" class="button-success">Draw Land Area</button>
+        <button id="clearLandButton" disabled>Clear Land</button>
+        <button id="generatePlotsButton" disabled>Generate 4-Acre Plots</button>
+      </div>
+      
+      <!-- New Crop Settings Panel -->
+      <div class="crop-panel">
+        <h2>Crop Settings</h2>
+        <div class="form-group">
+          <label for="crop-type">Crop Type:</label>
+          <select id="crop-type">
+            <option value="">Select Crop</option>
+            <option value="corn">Corn</option>
+            <option value="wheat">Wheat</option>
+            <option value="soybeans">Soybeans</option>
+            <option value="cotton">Cotton</option>
+            <option value="rice">Rice</option>
+            <option value="potatoes">Potatoes</option>
+            <option value="tomatoes">Tomatoes</option>
+            <option value="custom">Custom</option>
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label for="growth-stage">Growth Stage:</label>
+          <select id="growth-stage">
+            <option value="">Select Stage</option>
+            <option value="seeding">Seeding</option>
+            <option value="vegetative">Vegetative Growth</option>
+            <option value="flowering">Flowering</option>
+            <option value="fruiting">Fruiting</option>
+            <option value="maturation">Maturation</option>
+          </select>
+        </div>
+        
+        <div id="custom-npk-values" style="display: none;">
+          <div class="form-group">
+            <label for="ideal-n">Ideal Nitrogen (N) (ppm):</label>
+            <input type="number" id="ideal-n" min="0" max="1000" placeholder="Ideal N value">
+          </div>
+          
+          <div class="form-group">
+            <label for="ideal-p">Ideal Phosphorus (P) (ppm):</label>
+            <input type="number" id="ideal-p" min="0" max="1000" placeholder="Ideal P value">
+          </div>
+          
+          <div class="form-group">
+            <label for="ideal-k">Ideal Potassium (K) (ppm):</label>
+            <input type="number" id="ideal-k" min="0" max="1000" placeholder="Ideal K value">
+          </div>
+        </div>
+        
+        <div class="crop-settings-controls">
+          <button id="applyCropSettingsButton" class="button-primary">Apply Settings</button>
+          <button id="showRecommendationsButton" class="button-success" disabled>Show Recommendations</button>
+        </div>
+      </div>
+      
+      <div class="control-panel">
+        <h2>Data Management</h2>
+        <button id="saveDataButton" disabled>Save All Data</button>
+        <button id="viewDataButton">View Data Table</button>
+        <button id="exportDataButton" disabled>Export as CSV</button>
+      </div>
+      
+      <div class="status-panel">
+        <h2>Status</h2>
+        <div id="status-messages">
+          <div class="status-message">Ready to connect...</div>
+        </div>
+      </div>
+      
+      <div id="selected-plot-info" style="display: none;">
+        <h2>Selected Plot</h2>
+        <div class="plot-info">
+          <div>Plot ID: <span id="plot-id">-</span></div>
+          <div>Size: <span id="plot-size">-</span></div>
+        </div>
+        
+        <div class="npk-reading">
+          <h3>NPK Readings</h3>
+          <div class="npk-value">
+            <span class="npk-value-label">Nitrogen (N):</span>
+            <span id="n-value">-</span>
+          </div>
+          <div class="npk-value">
+            <span class="npk-value-label">Phosphorus (P):</span>
+            <span id="p-value">-</span>
+          </div>
+          <div class="npk-value">
+            <span class="npk-value-label">Potassium (K):</span>
+            <span id="k-value">-</span>
+          </div>
+          <div class="npk-value">
+            <span class="npk-value-label">Last Updated:</span>
+            <span id="reading-date">-</span>
+          </div>
+        </div>
+        
+        <!-- New NPK Comparison Section -->
+        <div id="npk-comparison" class="npk-comparison" style="display: none;">
+          <h3>Comparison to Ideal Values</h3>
+          <div class="npk-comparison-row">
+            <span class="comparison-label">Nitrogen (N):</span>
+            <div>
+              <div class="progress-container">
+                <div id="n-progress" class="progress-bar"></div>
+              </div>
+              <div class="comparison-value">
+                <span id="n-comparison-value"></span>
+                <span class="progress-value" id="n-percentage"></span>
+              </div>
+            </div>
+          </div>
+          <div class="npk-comparison-row">
+            <span class="comparison-label">Phosphorus (P):</span>
+            <div>
+              <div class="progress-container">
+                <div id="p-progress" class="progress-bar"></div>
+              </div>
+              <div class="comparison-value">
+                <span id="p-comparison-value"></span>
+                <span class="progress-value" id="p-percentage"></span>
+              </div>
+            </div>
+          </div>
+          <div class="npk-comparison-row">
+            <span class="comparison-label">Potassium (K):</span>
+            <div>
+              <div class="progress-container">
+                <div id="k-progress" class="progress-bar"></div>
+              </div>
+              <div class="comparison-value">
+                <span id="k-comparison-value"></span>
+                <span class="progress-value" id="k-percentage"></span>
+              </div>
+            </div>
+          </div>
+          <div id="npk-recommendation" class="npk-recommendation">
+            Select a crop and growth stage to see recommendations.
+          </div>
+        </div>
+      </div>
+    </aside>
+    
+    <main class="main">
+      <div class="map-container">
+        <div id="map"></div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Data View Modal -->
+  <div id="dataModal" class="modal">
+    <div class="modal-content">
+      <span class="close" id="closeModal">&times;</span>
+      <h2>NPK Data Table</h2>
+      <table id="npkDataTable">
+        <thead>
+          <tr>
+            <th>Plot ID</th>
+            <th>Nitrogen (N)</th>
+            <th>Phosphorus (P)</th>
+            <th>Potassium (K)</th>
+            <th>Date</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="npkDataBody">
+          <!-- Data will be inserted here -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+  
+  <!-- Recommendations Modal -->
+  <div id="recommendationsModal" class="modal">
+    <div class="modal-content">
+      <span class="close" id="closeRecommendationsModal">&times;</span>
+      <h2>NPK Recommendations</h2>
+      <div id="recommendationsContent">
+        <!-- Recommendations will be inserted here -->
+      </div>
+    </div>
+  </div>
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+  <script>
+    // BLE UUIDs
+    const SERVICE_UUID = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';
+    const CHARACTERISTIC_UUID = 'beb5483e-36e1-4688-b7f5-ea07361b26a8';
+    
+    // Global variables
+    let device = null;
+    let characteristic = null;
+    let map, drawnItems, drawControl;
+    let landPolygon = null;
+    let plotsLayer = L.layerGroup();
+    let selectedPlot = null;
+    let plots = [];
+    let npkData = {};
+    
+    // New crop settings variables
+    let cropType = "";
+    let growthStage = "";
+    let idealNPK = {
+      N: 0,
+      P: 0,
+      K: 0
+    };
+    
+    // Predefined crop NPK requirements based on growth stage
+    const cropRequirements = {
+      corn: {
+        seeding: { N: 150, P: 60, K: 40 },
+        vegetative: { N: 180, P: 40, K: 60 },
+        flowering: { N: 120, P: 40, K: 80 },
+        fruiting: { N: 100, P: 50, K: 100 },
+        maturation: { N: 80, P: 60, K: 120 }
+      },
+      wheat: {
+        seeding: { N: 100, P: 50, K: 40 },
+        vegetative: { N: 120, P: 40, K: 50 },
+        flowering: { N: 100, P: 30, K: 60 },
+        fruiting: { N: 80, P: 30, K: 70 },
+        maturation: { N: 60, P: 40, K: 80 }
+      },
+      soybeans: {
+        seeding: { N: 40, P: 60, K: 80 },
+        vegetative: { N: 50, P: 70, K: 90 },
+        flowering: { N: 60, P: 80, K: 100 },
+        fruiting: { N: 40, P: 60, K: 120 },
+        maturation: { N: 30, P: 40, K: 100 }
+      },
+      cotton: {
+        seeding: { N: 60, P: 80, K: 60 },
+        vegetative: { N: 80, P: 70, K: 70 },
+        flowering: { N: 100, P: 60, K: 90 },
+        fruiting: { N: 120, P: 50, K: 110 },
+        maturation: { N: 80, P: 40, K: 100 }
+      },
+      rice: {
+        seeding: { N: 80, P: 40, K: 60 },
+        vegetative: { N: 120, P: 30, K: 80 },
+        flowering: { N: 100, P: 30, K: 100 },
+        fruiting: { N: 80, P: 40, K: 120 },
+        maturation: { N: 60, P: 50, K: 100 }
+      },
+      potatoes: {
+        seeding: { N: 120, P: 150, K: 80 },
+        vegetative: { N: 150, P: 120, K: 100 },
+        flowering: { N: 100, P: 100, K: 120 },
+        fruiting: { N: 80, P: 80, K: 150 },
+        maturation: { N: 60, P: 60, K: 120 }
+      },
+      tomatoes: {
+        seeding: { N: 80, P: 120, K: 60 },
+        vegetative: { N: 100, P: 100, K: 80 },
+        flowering: { N: 120, P: 80, K: 100 },
+        fruiting: { N: 140, P: 60, K: 120 },
+        maturation: { N: 100, P: 40, K: 100 }
+      }
+    };
+
+    // Fertilizer recommendations based on nutrient deficiencies
+    const fertilizerRecommendations = {
+      N: {
+        low: "Apply nitrogen-rich fertilizers like urea, ammonium nitrate, or ammonium sulfate.",
+        medium: "Consider a balanced NPK fertilizer with higher nitrogen content.",
+        high: "Reduce nitrogen applications. Consider growing legumes as cover crops to prevent nitrogen leaching."
+      },
+      P: {
+        low: "Apply phosphorus-rich fertilizers like superphosphate or rock phosphate.",
+        medium: "Consider a balanced NPK fertilizer with adequate phosphorus content.",
+        high: "Avoid additional phosphorus. Consider soil testing to monitor phosphorus buildup."
+      },
+      K: {
+        low: "Apply potassium-rich fertilizers like potassium chloride or potassium sulfate.",
+        medium: "Consider a balanced NPK fertilizer with adequate potassium content.",
+        high: "Reduce potassium applications. Monitor soil for imbalances with calcium and magnesium."
+      }
+    };
+    
+    // DOM Elements
+    const connectButton = document.getElementById('connectButton');
+    const disconnectButton = document.getElementById('disconnectButton');
+    const drawLandButton = document.getElementById('drawLandButton');
+    const clearLandButton = document.getElementById('clearLandButton');
+    const generatePlotsButton = document.getElementById('generatePlotsButton');
+    const saveDataButton = document.getElementById('saveDataButton');
+    const viewDataButton = document.getElementById('viewDataButton');
+    const exportDataButton = document.getElementById('exportDataButton');
+    const statusMessages = document.getElementById('status-messages');
+    const connectionStatus = document.getElementById('connection-status');
+    const selectedPlotInfo = document.getElementById('selected-plot-info');
+    const plotIdElement = document.getElementById('plot-id');
+    const plotSizeElement = document.getElementById('plot-size');
+    const nValueElement = document.getElementById('n-value');
+    const pValueElement = document.getElementById('p-value');
+    const kValueElement = document.getElementById('k-value');
+    const readingDateElement = document.getElementById('reading-date');
+    const dataModal = document.getElementById('dataModal');
+    const closeModal = document.getElementById('closeModal');
+    const npkDataBody = document.getElementById('npkDataBody');
+    
+    // New crop settings DOM elements
+    const cropTypeSelect = document.getElementById('crop-type');
+    const growthStageSelect = document.getElementById('growth-stage');
+    const customNpkValues = document.getElementById('custom-npk-values');
+    const idealNInput = document.getElementById('ideal-n');
+    const idealPInput = document.getElementById('ideal-p');
+    const idealKInput = document.getElementById('ideal-k');
+    const applyCropSettingsButton = document.getElementById('applyCropSettingsButton');
+    const showRecommendationsButton = document.getElementById('showRecommendationsButton');
+    const npkComparison = document.getElementById('npk-comparison');
+    const nProgressBar = document.getElementById('n-progress');
+    const pProgressBar = document.getElementById('p-progress');
+    const kProgressBar = document.getElementById('k-progress');
+    const nComparisonValue = document.getElementById('n-comparison-value');
+    const pComparisonValue = document.getElementById('p-comparison-value');
+    const kComparisonValue = document.getElementById('k-comparison-value');
+    const nPercentage = document.getElementById('n-percentage');
+    const pPercentage = document.getElementById('p-percentage');
+    const kPercentage = document.getElementById('k-percentage');
+    const npkRecommendation = document.getElementById('npk-recommendation');
+    const recommendationsModal = document.getElementById('recommendationsModal');
+    const closeRecommendationsModal = document.getElementById('closeRecommendationsModal');
+    const recommendationsContent = document.getElementById('recommendationsContent');
+    
+    // Initialize Map
+    // Replace the existing L.tileLayer in the initMap function with this code:
+
+function initMap() {
+  map = L.map('map').setView([51.505, -0.09], 13);
+  
+  // Replace OpenStreetMap with satellite imagery
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
+    maxZoom: 19
+  }).addTo(map);
+  
+  // Initialize Draw Control
+  drawnItems = new L.FeatureGroup();
+  map.addLayer(drawnItems);
+  map.addLayer(plotsLayer);
+  
+  drawControl = new L.Control.Draw({
+    draw: {
+      polyline: false,
+      circle: false,
+      circlemarker: false,
+      marker: false,
+      rectangle: false,
+      polygon: {
+        allowIntersection: false,
+        showArea: true
+      }
+    },
+    edit: {
+      featureGroup: drawnItems,
+      remove: true
+    }
+  });
+  
+  // Handle draw events
+  map.on(L.Draw.Event.CREATED, function(event) {
+    const layer = event.layer;
+    landPolygon = layer;
+    drawnItems.addLayer(layer);
+    clearLandButton.disabled = false;
+    generatePlotsButton.disabled = false;
+    updateStatus('Land area drawn. You can now generate plots.', 'success');
+  });
+  
+  map.on(L.Draw.Event.DELETED, function() {
+    if (drawnItems.getLayers().length === 0) {
+      landPolygon = null;
+      clearLandButton.disabled = true;
+      generatePlotsButton.disabled = true;
+    }
+  });
+  
+  // Add legend to map
+  addMapLegend();
+}
+    
+    // Add legend to map
+    function addMapLegend() {
+      const legend = L.control({ position: 'bottomright' });
+      
+      legend.onAdd = function() {
+        const div = L.DomUtil.create('div', 'map-legend-control');
+        div.innerHTML = '<h4>Soil Nutrient Status</h4>';
+        
+        const statuses = [
+          { color: '#27ae60', label: 'Optimal' },
+          { color: '#f39c12', label: 'Suboptimal' },
+          { color: '#e74c3c', label: 'Poor' },
+          { color: '#3498db', label: 'No Data' }
+        ];
+        
+        statuses.forEach(status => {
+          div.innerHTML += `
+            <div class="map-legend-item">
+              <div class="map-legend-color" style="background-color: ${status.color}"></div>
+              <span>${status.label}</span>
+            </div>
+          `;
+        });
+        
+        return div;
+      };
+      
+      legend.addTo(map);
+    }
+    
+    // Helper Functions
+    function updateStatus(message, type = '') {
+      const statusElem = document.createElement('div');
+      statusElem.textContent = message;
+      statusElem.classList.add('status-message');
+      
+      if (type === 'error') {
+        statusElem.classList.add('status-error');
+      } else if (type === 'success') {
+        statusElem.classList.add('status-success');
+      }
+      
+      statusMessages.appendChild(statusElem);
+      statusMessages.scrollTop = statusMessages.scrollHeight;
+      
+      // Keep only the last 5 messages
+      while (statusMessages.children.length > 5) {
+        statusMessages.removeChild(statusMessages.firstChild);
+      }
+    }
+    
+    function calculateSoilStatus(n, p, k) {
+      if (!cropType || !growthStage || !idealNPK.N || !idealNPK.P || !idealNPK.K) {
+        return 'unknown';
+      }
+      
+      // Calculate percentage of ideal values
+      const nPercent = (n / idealNPK.N) * 100;
+      const pPercent = (p / idealNPK.P) * 100;
+      const kPercent = (k / idealNPK.K) * 100;
+      
+      // Average of the three nutrients
+      const avgPercent = (nPercent + pPercent + kPercent) / 3;
+      
+      if (avgPercent >= 85) {
+        return 'optimal';
+      } else if (avgPercent >= 60) {
+        return 'suboptimal';
+      } else {
+        return 'poor';
+      }
+    }
+    
+    function getStatusColor(status) {
+      switch (status) {
+        case 'optimal':
+          return '#27ae60';
+        case 'suboptimal':
+          return '#f39c12';
+        case 'poor':
+          return '#e74c3c';
+        default:
+          return '#3498db'; // No data or unknown
+      }
+    }
+    
+    function updatePlotColors() {
+      plots.forEach(plot => {
+        const plotData = npkData[plot.id];
+        if (plotData) {
+          const status = calculateSoilStatus(plotData.N, plotData.P, plotData.K);
+          const color = getStatusColor(status);
+          plot.polygon.setStyle({ fillColor: color });
+        } else {
+          plot.polygon.setStyle({ fillColor: '#3498db' }); // Default color
+        }
+      });
+    }
+    
+    // Bluetooth Functions
+    async function connectToBLE() {
+      try {
+        updateStatus('Requesting Bluetooth device...', 'status');
+        
+        device = await navigator.bluetooth.requestDevice({
+          filters: [{ name: 'ESP32_NPK_Sensor' }],
+          optionalServices: [SERVICE_UUID]
+        });
+        
+        updateStatus('Connecting to device...', 'status');
+        const server = await device.gatt.connect();
+        
+        updateStatus('Getting service...', 'status');
+        const service = await server.getPrimaryService(SERVICE_UUID);
+        
+        updateStatus('Getting characteristic...', 'status');
+        characteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
+        
+        updateStatus('Starting notifications...', 'status');
+        await characteristic.startNotifications();
+        
+        characteristic.addEventListener('characteristicvaluechanged', handleNotifications);
+        
+        updateStatus('Connected successfully!', 'success');
+        connectionStatus.textContent = 'Connected';
+        connectButton.disabled = true;
+        disconnectButton.disabled = false;
+        saveDataButton.disabled = false;
+        exportDataButton.disabled = false;
+        
+        device.addEventListener('gattserverdisconnected', handleDisconnection);
+      } catch (error) {
+        updateStatus(`Connection failed: ${error}`, 'error');
+        console.error('Bluetooth Error:', error);
+      }
+    }
+    
+    function handleNotifications(event) {
+      const value = event.target.value;
+      const decoder = new TextDecoder('utf-8');
+      const data = decoder.decode(value);
+      
+      try {
+        const readings = JSON.parse(data);
+        
+        if (selectedPlot && readings) {
+          updateStatus(`New readings received for Plot ${selectedPlot.id}`, 'success');
+          
+          // Store NPK data for the selected plot
+          npkData[selectedPlot.id] = {
+            N: readings.N,
+            P: readings.P,
+            K: readings.K,
+            date: new Date().toLocaleString()
+          };
+          
+          // Update the UI
+          nValueElement.textContent = `${readings.N} ppm`;
+          pValueElement.textContent = `${readings.P} ppm`;
+          kValueElement.textContent = `${readings.K} ppm`;
+          readingDateElement.textContent = npkData[selectedPlot.id].date;
+          
+          // Update plot color
+          const status = calculateSoilStatus(readings.N, readings.P, readings.K);
+          const color = getStatusColor(status);
+          selectedPlot.polygon.setStyle({ fillColor: color });
+          
+          // Update comparison if crop settings are applied
+          if (cropType && growthStage) {
+            updateNPKComparison();
+          }
+        }
+      } catch (error) {
+        updateStatus(`Error parsing data: ${error}`, 'error');
+        console.error('Data parsing error:', error);
+      }
+    }
+    
+    function handleDisconnection() {
+      updateStatus('Device disconnected', 'error');
+      connectionStatus.textContent = 'Disconnected';
+      connectButton.disabled = false;
+      disconnectButton.disabled = true;
+      characteristic = null;
+    }
+    
+    async function disconnectDevice() {
+      if (device && device.gatt.connected) {
+        await device.gatt.disconnect();
+      }
+      
+      updateStatus('Device disconnected', 'status');
+      connectionStatus.textContent = 'Disconnected';
+      connectButton.disabled = false;
+      disconnectButton.disabled = true;
+    }
+    
+    // Plot Management Functions
+    function generatePlots() {
+      if (!landPolygon) {
+        updateStatus('Please draw land area first', 'error');
+        return;
+      }
+      
+      // Clear existing plots
+      plots = [];
+      plotsLayer.clearLayers();
+      
+      const bounds = landPolygon.getBounds();
+      const landArea = L.GeometryUtil.geodesicArea(landPolygon.getLatLngs()[0]);
+      const acreSizeInSqMeters = 4046.86; // 1 acre in square meters
+      
+      // Calculate grid size for approximately 4-acre plots
+      const plotArea = 4 * acreSizeInSqMeters;
+      const estPlotCount = Math.floor(landArea / plotArea);
+      
+      updateStatus(`Generating approximately ${estPlotCount} plots of 4 acres each...`, 'status');
+      
+      // Calculate grid dimensions
+      const width = bounds.getEast() - bounds.getWest();
+      const height = bounds.getNorth() - bounds.getSouth();
+      
+      const aspectRatio = width / height;
+      const rowCount = Math.round(Math.sqrt(estPlotCount / aspectRatio));
+      const colCount = Math.round(Math.sqrt(estPlotCount * aspectRatio));
+      
+      const cellWidth = width / colCount;
+      const cellHeight = height / rowCount;
+      
+      // Generate grid
+      for (let row = 0; row < rowCount; row++) {
+        for (let col = 0; col < colCount; col++) {
+          const south = bounds.getSouth() + row * cellHeight;
+          const west = bounds.getWest() + col * cellWidth;
+          const north = south + cellHeight;
+          const east = west + cellWidth;
+          
+          const plotBounds = L.latLngBounds(
+            L.latLng(south, west),
+            L.latLng(north, east)
+          );
+          
+          const plotPolygon = L.rectangle(plotBounds, {
+            color: '#3498db',
+            weight: 2,
+            opacity: 0.8,
+            fillColor: '#3498db',
+            fillOpacity: 0.4
+          });
+          
+          // Check if the plot is inside the land polygon
+          const plotCenter = plotBounds.getCenter();
+          if (leafletPointInPolygon(plotCenter, landPolygon)) {
+            const plotId = `P${row+1}${col+1}`;
+            
+            // Add plot ID label
+            const label = L.marker(plotCenter, {
+              icon: L.divIcon({
+                className: 'plot-label',
+                html: `<div style="background-color: rgba(255,255,255,0.7); padding: 2px 5px; border-radius: 3px;">${plotId}</div>`,
+                iconSize: [40, 20],
+                iconAnchor: [20, 10]
+              })
+            });
+            
+            // Store plot data
+            const plot = {
+              id: plotId,
+              bounds: plotBounds,
+              polygon: plotPolygon,
+              label: label,
+              center: plotCenter
+            };
+            
+            plots.push(plot);
+            
+            // Add plot to map
+            plotsLayer.addLayer(plotPolygon);
+            plotsLayer.addLayer(label);
+            
+            // Add click handler
+            plotPolygon.on('click', function() {
+              selectPlot(plot);
+            });
+          }
+        }
+      }
+      
+      updateStatus(`Generated ${plots.length} plots`, 'success');
+    }
+    
+    function leafletPointInPolygon(point, polygon) {
+      const latlngs = polygon.getLatLngs()[0];
+      const x = point.lng;
+      const y = point.lat;
+      
+      let inside = false;
+      for (let i = 0, j = latlngs.length - 1; i < latlngs.length; j = i++) {
+        const xi = latlngs[i].lng;
+        const yi = latlngs[i].lat;
+        const xj = latlngs[j].lng;
+        const yj = latlngs[j].lat;
+        
+        const intersect = ((yi > y) !== (yj > y)) && 
+                          (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+        if (intersect) inside = !inside;
+      }
+      
+      return inside;
+    }
+    
+    function clearLand() {
+      drawnItems.clearLayers();
+      plotsLayer.clearLayers();
+      landPolygon = null;
+      plots = [];
+      clearLandButton.disabled = true;
+      generatePlotsButton.disabled = true;
+      selectedPlot = null;
+      selectedPlotInfo.style.display = 'none';
+      updateStatus('Land and plots cleared', 'status');
+    }
+    
+    function selectPlot(plot) {
+      // Reset previous selection
+      if (selectedPlot) {
+        selectedPlot.polygon.setStyle({ weight: 2 });
+      }
+      
+      // Set new selection
+      selectedPlot = plot;
+      selectedPlot.polygon.setStyle({ weight: 4 });
+      
+      // Update plot info UI
+      plotIdElement.textContent = plot.id;
+      plotSizeElement.textContent = '~4 acres';
+      
+      // Check if we have NPK data for this plot
+      if (npkData[plot.id]) {
+        nValueElement.textContent = `${npkData[plot.id].N} ppm`;
+        pValueElement.textContent = `${npkData[plot.id].P} ppm`;
+        kValueElement.textContent = `${npkData[plot.id].K} ppm`;
+        readingDateElement.textContent = npkData[plot.id].date;
+      } else {
+        nValueElement.textContent = '-';
+        pValueElement.textContent = '-';
+        kValueElement.textContent = '-';
+        readingDateElement.textContent = '-';
+      }
+      
+      // Show plot info panel
+      selectedPlotInfo.style.display = 'block';
+      
+      // Update NPK comparison if crop settings are applied
+      if (cropType && growthStage && npkData[plot.id]) {
+        updateNPKComparison();
+      } else {
+        npkComparison.style.display = 'none';
+      }
+      
+      // Zoom to plot
+      map.fitBounds(plot.bounds, { padding: [50, 50] });
+      
+      updateStatus(`Selected plot ${plot.id}`, 'status');
+    }
+    
+    // Data Management Functions
+    function saveData() {
+      localStorage.setItem('npkData', JSON.stringify(npkData));
+      updateStatus('Data saved to local storage', 'success');
+    }
+    
+    function loadData() {
+      const savedData = localStorage.getItem('npkData');
+      if (savedData) {
+        npkData = JSON.parse(savedData);
+        updateStatus('Data loaded from local storage', 'status');
+      }
+    }
+    
+    function updateDataTable() {
+      // Clear current table
+      npkDataBody.innerHTML = '';
+      
+      // Add data for each plot
+      for (const plotId in npkData) {
+        const data = npkData[plotId];
+        const row = document.createElement('tr');
+        
+        // Calculate soil status
+        const status = calculateSoilStatus(data.N, data.P, data.K);
+        
+        row.innerHTML = `
+          <td>${plotId}</td>
+          <td>${data.N} ppm</td>
+          <td>${data.P} ppm</td>
+          <td>${data.K} ppm</td>
+          <td>${data.date}</td>
+          <td>
+            <div style="display: flex; align-items: center;">
+              <span class="alert-indicator alert-${status}"></span>
+              ${status.charAt(0).toUpperCase() + status.slice(1)}
+            </div>
+          </td>
+        `;
+        
+        npkDataBody.appendChild(row);
+      }
+      
+      // Show modal
+      dataModal.style.display = 'block';
+    }
+    
+    function exportCSV() {
+      let csv = 'Plot ID,Nitrogen (ppm),Phosphorus (ppm),Potassium (ppm),Date,Status\n';
+      
+      for (const plotId in npkData) {
+        const data = npkData[plotId];
+        const status = calculateSoilStatus(data.N, data.P, data.K);
+        
+        csv += `${plotId},${data.N},${data.P},${data.K},"${data.date}",${status}\n`;
+      }
+      
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      
+      const a = document.createElement('a');
+      a.setAttribute('href', url);
+      a.setAttribute('download', 'npk_data.csv');
+      a.style.display = 'none';
+      
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      
+      updateStatus('Data exported as CSV', 'success');
+    }
+    
+    // Crop Settings Functions
+    function applyCropSettings() {
+      cropType = cropTypeSelect.value;
+      growthStage = growthStageSelect.value;
+      
+      if (cropType === 'custom') {
+        idealNPK.N = parseInt(idealNInput.value) || 0;
+        idealNPK.P = parseInt(idealPInput.value) || 0;
+        idealNPK.K = parseInt(idealKInput.value) || 0;
+      } else if (cropType && growthStage && cropRequirements[cropType] && cropRequirements[cropType][growthStage]) {
+        idealNPK = cropRequirements[cropType][growthStage];
+      } else {
+        updateStatus('Please select valid crop and growth stage', 'error');
+        return;
+      }
+      
+      updateStatus(`Applied crop settings for ${cropType} at ${growthStage} stage`, 'success');
+      showRecommendationsButton.disabled = false;
+      
+      // Update all plot colors based on new requirements
+      updatePlotColors();
+      
+      // Update comparison if a plot is selected
+      if (selectedPlot && npkData[selectedPlot.id]) {
+        updateNPKComparison();
+      }
+    }
+    
+    function updateNPKComparison() {
+      if (!selectedPlot || !npkData[selectedPlot.id]) {
+        npkComparison.style.display = 'none';
+        return;
+      }
+      
+      const data = npkData[selectedPlot.id];
+      
+      // Calculate percentages
+      const nPercentVal = Math.round((data.N / idealNPK.N) * 100);
+      const pPercentVal = Math.round((data.P / idealNPK.P) * 100);
+      const kPercentVal = Math.round((data.K / idealNPK.K) * 100);
+      
+      // Set progress bars with capped values at 100%
+      nProgressBar.style.width = `${Math.min(nPercentVal, 100)}%`;
+      pProgressBar.style.width = `${Math.min(pPercentVal, 100)}%`;
+      kProgressBar.style.width = `${Math.min(kPercentVal, 100)}%`;
+      
+      // Set percentage text
+      nPercentage.textContent = `${nPercentVal}%`;
+      pPercentage.textContent = `${pPercentVal}%`;
+      kPercentage.textContent = `${kPercentVal}%`;
+      
+      // Set classes for progress bars
+      if (nPercentVal >= 85) {
+        nProgressBar.className = 'progress-bar progress-optimal';
+        nComparisonValue.innerHTML = '<span class="alert-indicator alert-optimal"></span>Optimal';
+      } else if (nPercentVal >= 60) {
+        nProgressBar.className = 'progress-bar progress-suboptimal';
+        nComparisonValue.innerHTML = '<span class="alert-indicator alert-suboptimal"></span>Suboptimal';
+      } else {
+        nProgressBar.className = 'progress-bar progress-poor';
+        nComparisonValue.innerHTML = '<span class="alert-indicator alert-poor"></span>Poor';
+      }
+      
+      if (pPercentVal >= 85) {
+        pProgressBar.className = 'progress-bar progress-optimal';
+        pComparisonValue.innerHTML = '<span class="alert-indicator alert-optimal"></span>Optimal';
+      } else if (pPercentVal >= 60) {
+        pProgressBar.className = 'progress-bar progress-suboptimal';
+        pComparisonValue.innerHTML = '<span class="alert-indicator alert-suboptimal"></span>Suboptimal';
+      } else {
+        pProgressBar.className = 'progress-bar progress-poor';
+        pComparisonValue.innerHTML = '<span class="alert-indicator alert-poor"></span>Poor';
+      }
+      
+      if (kPercentVal >= 85) {
+        kProgressBar.className = 'progress-bar progress-optimal';
+        kComparisonValue.innerHTML = '<span class="alert-indicator alert-optimal"></span>Optimal';
+      } else if (kPercentVal >= 60) {
+        kProgressBar.className = 'progress-bar progress-suboptimal';
+        kComparisonValue.innerHTML = '<span class="alert-indicator alert-suboptimal"></span>Suboptimal';
+      } else {
+        kProgressBar.className = 'progress-bar progress-poor';
+        kComparisonValue.innerHTML = '<span class="alert-indicator alert-poor"></span>Poor';
+      }
+      
+      // Generate basic recommendation
+      generateSimpleRecommendation();
+      
+      // Show comparison panel
+      npkComparison.style.display = 'block';
+    }
+    
+    function generateSimpleRecommendation() {
+      if (!selectedPlot || !npkData[selectedPlot.id]) {
+        return;
+      }
+      
+      const data = npkData[selectedPlot.id];
+      let recommendation = '';
+      
+      // Nitrogen recommendation
+      const nPercentVal = (data.N / idealNPK.N) * 100;
+      if (nPercentVal < 60) {
+        recommendation += fertilizerRecommendations.N.low + '<br>';
+      } else if (nPercentVal < 85) {
+        recommendation += fertilizerRecommendations.N.medium + '<br>';
+      } else if (nPercentVal > 120) {
+        recommendation += fertilizerRecommendations.N.high + '<br>';
+      }
+      
+      // Phosphorus recommendation
+      const pPercentVal = (data.P / idealNPK.P) * 100;
+      if (pPercentVal < 60) {
+        recommendation += fertilizerRecommendations.P.low + '<br>';
+      } else if (pPercentVal < 85) {
+        recommendation += fertilizerRecommendations.P.medium + '<br>';
+      } else if (pPercentVal > 120) {
+        recommendation += fertilizerRecommendations.P.high + '<br>';
+      }
+      
+      // Potassium recommendation
+      const kPercentVal = (data.K / idealNPK.K) * 100;
+      if (kPercentVal < 60) {
+        recommendation += fertilizerRecommendations.K.low + '<br>';
+      } else if (kPercentVal < 85) {
+        recommendation += fertilizerRecommendations.K.medium + '<br>';
+      } else if (kPercentVal > 120) {
+        recommendation += fertilizerRecommendations.K.high + '<br>';
+      }
+      
+      // If all nutrients are optimal
+      if (nPercentVal >= 85 && nPercentVal <= 120 && 
+          pPercentVal >= 85 && pPercentVal <= 120 && 
+          kPercentVal >= 85 && kPercentVal <= 120) {
+        recommendation = 'Soil nutrient levels are optimal for the selected crop and growth stage. Continue with regular maintenance fertilization.';
+      }
+      
+      npkRecommendation.innerHTML = recommendation;
+    }
+    
+    function showDetailedRecommendations() {
+      if (!cropType || !growthStage) {
+        updateStatus('Please apply crop settings first', 'error');
+        return;
+      }
+      
+      // Generate detailed recommendations for all plots
+      let html = `
+        <h3>Fertilizer Recommendations for ${cropType.charAt(0).toUpperCase() + cropType.slice(1)} (${growthStage} stage)</h3>
+        <p>Ideal NPK values: N: ${idealNPK.N} ppm, P: ${idealNPK.P} ppm, K: ${idealNPK.K} ppm</p>
+        <table>
+          <thead>
+            <tr>
+              <th>Plot ID</th>
+              <th>Soil Status</th>
+              <th>Recommendations</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+      
+      let hasData = false;
+      
+      for (const plotId in npkData) {
+        hasData = true;
+        const data = npkData[plotId];
+        const status = calculateSoilStatus(data.N, data.P, data.K);
+        
+        let recommendation = '';
+        
+        // Generate specific recommendations
+        const nPercentVal = (data.N / idealNPK.N) * 100;
+        const pPercentVal = (data.P / idealNPK.P) * 100;
+        const kPercentVal = (data.K / idealNPK.K) * 100;
+        
+        if (nPercentVal < 60) {
+          recommendation += '• <strong>N:</strong> ' + fertilizerRecommendations.N.low + '<br>';
+        } else if (nPercentVal < 85) {
+          recommendation += '• <strong>N:</strong> ' + fertilizerRecommendations.N.medium + '<br>';
+        } else if (nPercentVal > 120) {
+          recommendation += '• <strong>N:</strong> ' + fertilizerRecommendations.N.high + '<br>';
+        } else {
+          recommendation += '• <strong>N:</strong> Levels optimal.<br>';
+        }
+        
+        if (pPercentVal < 60) {
+          recommendation += '• <strong>P:</strong> ' + fertilizerRecommendations.P.low + '<br>';
+        } else if (pPercentVal < 85) {
+          recommendation += '• <strong>P:</strong> ' + fertilizerRecommendations.P.medium + '<br>';
+        } else if (pPercentVal > 120) {
+          recommendation += '• <strong>P:</strong> ' + fertilizerRecommendations.P.high + '<br>';
+        } else {
+          recommendation += '• <strong>P:</strong> Levels optimal.<br>';
+        }
+        
+        if (kPercentVal < 60) {
+          recommendation += '• <strong>K:</strong> ' + fertilizerRecommendations.K.low + '<br>';
+        } else if (kPercentVal < 85) {
+          recommendation += '• <strong>K:</strong> ' + fertilizerRecommendations.K.medium + '<br>';
+        } else if (kPercentVal > 120) {
+          recommendation += '• <strong>K:</strong> ' + fertilizerRecommendations.K.high + '<br>';
+        } else {
+          recommendation += '• <strong>K:</strong> Levels optimal.<br>';
+        }
+        
+        html += `
+          <tr>
+            <td>${plotId}</td>
+            <td>
+              <div style="display: flex; align-items: center;">
+                <span class="alert-indicator alert-${status}"></span>
+                ${status.charAt(0).toUpperCase() + status.slice(1)}
+              </div>
+            </td>
+            <td>${recommendation}</td>
+          </tr>
+        `;
+      }
+      
+      html += `
+          </tbody>
+        </table>
+      `;
+      
+      if (!hasData) {
+        html = '<p>No soil data available. Please take NPK readings for your plots first.</p>';
+      }
+      
+      recommendationsContent.innerHTML = html;
+      recommendationsModal.style.display = 'block';
+    }
+    
+    // Event Listeners
+    function setupEventListeners() {
+      // Connection buttons
+      connectButton.addEventListener('click', connectToBLE);
+      disconnectButton.addEventListener('click', disconnectDevice);
+      
+      // Land management buttons
+      drawLandButton.addEventListener('click', function() {
+        map.addControl(drawControl);
+        updateStatus('Drawing mode activated. Draw a polygon on the map.', 'status');
+      });
+      
+      clearLandButton.addEventListener('click', clearLand);
+      generatePlotsButton.addEventListener('click', generatePlots);
+      
+      // Data management buttons
+      saveDataButton.addEventListener('click', saveData);
+      viewDataButton.addEventListener('click', updateDataTable);
+      exportDataButton.addEventListener('click', exportCSV);
+      
+      // Modal close buttons
+      closeModal.addEventListener('click', function() {
+        dataModal.style.display = 'none';
+      });
+      
+      closeRecommendationsModal.addEventListener('click', function() {
+        recommendationsModal.style.display = 'none';
+      });
+      
+      // Close modals when clicking outside
+      window.addEventListener('click', function(event) {
+        if (event.target === dataModal) {
+          dataModal.style.display = 'none';
+        }
+        if (event.target === recommendationsModal) {
+          recommendationsModal.style.display = 'none';
+        }
+      });
+      
+      // Crop settings events
+      cropTypeSelect.addEventListener('change', function() {
+        if (this.value === 'custom') {
+          customNpkValues.style.display = 'block';
+        } else {
+          customNpkValues.style.display = 'none';
+        }
+      });
+      
+      applyCropSettingsButton.addEventListener('click', applyCropSettings);
+      showRecommendationsButton.addEventListener('click', showDetailedRecommendations);
+    }
+    
+    // Initialize the application
+    function init() {
+      initMap();
+      setupEventListeners();
+      loadData();
+      updateStatus('Application initialized. Ready to connect.', 'status');
+    }
+    
+    // Start the app when the page loads
+    window.addEventListener('load', init);
+  </script>
+</body>
+</html>
